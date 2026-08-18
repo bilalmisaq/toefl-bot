@@ -3,10 +3,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import openai
 
-# ========== YOUR SECRETS ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-CHANNEL_ID = "@MisaqInternational"  # YOUR CHANNEL NAME!
+CHANNEL_ID = "@MisaqInternational"  # ← CHANGE TO YOUR CHANNEL!
 
 if not TOKEN or not OPENAI_KEY:
     print("❌ Missing keys!")
@@ -14,36 +13,38 @@ if not TOKEN or not OPENAI_KEY:
 
 openai.api_key = OPENAI_KEY
 
-# ========== CHECK IF USER JOINED CHANNEL ==========
 async def is_member(user_id):
     try:
-        # This ACTUALLY checks if the user joined
         member = await app.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
     except:
         return False
 
-# ========== START COMMAND ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    # CHECK if user joined the channel
+    # CHECK if user joined
     if not await is_member(user_id):
-        # User hasn't joined - show join button
-        keyboard = [[InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")]]
+        # User hasn't joined - show join button AND check button
+        keyboard = [
+            [InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")],
+            [InlineKeyboardButton("✅ Check Membership", callback_data="check_membership")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
             f"👋 Welcome {user.first_name}!\n\n"
             "⚠️ Please join our channel FIRST to use this bot:\n"
             "👉 @MisaqInternational\n\n"
-            "After joining, click /start again.",
+            "1️⃣ Click 'Join Our Channel'\n"
+            "2️⃣ Join the channel\n"
+            "3️⃣ Come back and click 'Check Membership'",
             reply_markup=reply_markup
         )
         return
     
-    # USER JOINED! Show the MAIN MENU
+    # USER JOINED! Show MAIN MENU
     keyboard = [
         [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
         [InlineKeyboardButton("🌍 IELTS", callback_data="ielts")],
@@ -55,16 +56,56 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎉 **Welcome to Misaq Test Bot!**\n\n"
         "✅ You've joined our channel!\n"
-        "Now select an option below:",
+        "Now select an option:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
 
-# ========== BUTTON CLICKS ==========
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    # CHECK MEMBERSHIP BUTTON
+    if query.data == "check_membership":
+        user_id = query.from_user.id
+        
+        if await is_member(user_id):
+            # They joined! Show menu
+            keyboard = [
+                [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
+                [InlineKeyboardButton("🌍 IELTS", callback_data="ielts")],
+                [InlineKeyboardButton("❓ Help", callback_data="help")],
+                [InlineKeyboardButton("📞 Contact", callback_data="contact")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "✅ **You've joined!** 🎉\n\n"
+                "Welcome to Misaq Test Bot!\n"
+                "Select an option below:",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            # Still not joined
+            keyboard = [
+                [InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")],
+                [InlineKeyboardButton("✅ Check Again", callback_data="check_membership")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "❌ **You haven't joined yet!**\n\n"
+                "Please join @MisaqInternational first:\n"
+                "1️⃣ Click 'Join Our Channel'\n"
+                "2️⃣ Join the channel\n"
+                "3️⃣ Click 'Check Again'",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        return
+    
+    # TOEFL MENU
     if query.data == "toefl":
         keyboard = [
             [InlineKeyboardButton("✉️ Write an Email", callback_data="toefl_email")],
@@ -116,7 +157,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-# ========== GRADE USER'S WRITING ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'task' not in context.user_data:
         await update.message.reply_text("⚠️ Please select a task from the menu first!")
@@ -125,82 +165,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     task_type = context.user_data['task']
     
-    await update.message.reply_text("⏳ Grading your work... Please wait! ⏳")
+    await update.message.reply_text("⏳ Grading...")
     
     if task_type == "email":
-        prompt = f"""
-You are an expert TOEFL writing evaluator. Grade this email on 5 points for:
-1. Grammar
-2. Spelling
-3. Clarity
-4. Sentence Variety
-5. Overall Score
-
-Also provide:
-- A revised 5/5 version
-- Short feedback
-
-User's Email:
-{user_text}
-
-Return in this exact format:
-📊 **Score Breakdown:**
-Grammar: X/5
-Spelling: X/5
-Clarity: X/5
-Sentence Variety: X/5
-Overall: X/5
-
-✅ **5/5 Revised Version:**
-[Write the improved version]
-
-💡 **Feedback:**
-[Write 2-3 sentences]
-"""
+        prompt = f"Grade this email on Grammar, Spelling, Clarity, Sentence Variety (out of 5). Give overall score. Provide improved version. Email: {user_text}"
     else:
-        prompt = f"""
-You are an expert TOEFL writing evaluator. Grade this discussion response on 5 points for:
-1. Grammar
-2. Spelling
-3. Clarity
-4. Sentence Variety
-5. Overall Score
-
-Also provide:
-- A revised 5/5 version
-- Short feedback
-
-User's Response:
-{user_text}
-
-Return in this exact format:
-📊 **Score Breakdown:**
-Grammar: X/5
-Spelling: X/5
-Clarity: X/5
-Sentence Variety: X/5
-Overall: X/5
-
-✅ **5/5 Revised Version:**
-[Write the improved version]
-
-💡 **Feedback:**
-[Write 2-3 sentences]
-"""
+        prompt = f"Grade this discussion response on Grammar, Spelling, Clarity, Sentence Variety (out of 5). Give overall score. Provide improved version. Response: {user_text}"
     
     try:
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}]
         )
-        
-        reply = response.choices[0].message.content
-        await update.message.reply_text(reply, parse_mode="Markdown")
-        
+        await update.message.reply_text(response.choices[0].message.content)
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
-# ========== RUN THE BOT ==========
 def main():
     global app
     app = Application.builder().token(TOKEN).build()
@@ -209,7 +189,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_click))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("🤖 Bot is running!")
+    print("🤖 Bot running!")
     app.run_polling()
 
 if __name__ == "__main__":
