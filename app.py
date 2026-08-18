@@ -1,23 +1,21 @@
 import os
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-import openai
 
-# ========== YOUR SECRETS ==========
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-CHANNEL_ID = "@MisaqInternational"
+# ========== CONFIGURATION ==========
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+CHANNEL_ID = "@MisaqInternational" # <<<--- PUT YOUR CHANNEL USERNAME HERE
 
-if not TOKEN or not OPENAI_KEY:
-    print("❌ Missing keys!")
+if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
+    print("❌ Missing TELEGRAM_TOKEN or OPENAI_API_KEY!")
     exit(1)
 
-openai.api_key = OPENAI_KEY
-
-# ========== CHECK IF USER JOINED CHANNEL ==========
+# ========== CHECK MEMBERSHIP ==========
 async def is_member(user_id):
     try:
-        app = Application.builder().token(TOKEN).build()
+        app = Application.builder().token(TELEGRAM_TOKEN).build()
         member = await app.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         await app.shutdown()
         return member.status in ["member", "administrator", "creator"]
@@ -29,25 +27,24 @@ async def is_member(user_id):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
-    
+
     if not await is_member(user_id):
         keyboard = [
             [InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")],
             [InlineKeyboardButton("✅ Check Membership", callback_data="check_membership")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await update.message.reply_text(
             f"👋 Welcome {user.first_name}!\n\n"
             "⚠️ Please join our channel FIRST to use this bot:\n"
-            "👉 @MisaqInternational\n\n"
+            f"👉 {CHANNEL_ID}\n\n"
             "1️⃣ Click 'Join Our Channel'\n"
             "2️⃣ Join the channel\n"
             "3️⃣ Click 'Check Membership'",
             reply_markup=reply_markup
         )
         return
-    
+
     keyboard = [
         [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
         [InlineKeyboardButton("🌍 IELTS", callback_data="ielts")],
@@ -55,7 +52,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📞 Contact", callback_data="contact")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
         "🎉 **Welcome to Misaq Test Bot!**\n\n"
         "✅ You've joined our channel!\n"
@@ -68,10 +64,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     if query.data == "check_membership":
         user_id = query.from_user.id
-        
         if await is_member(user_id):
             keyboard = [
                 [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
@@ -80,11 +75,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("📞 Contact", callback_data="contact")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await query.edit_message_text(
-                "✅ **You've joined!** 🎉\n\n"
-                "Welcome to Misaq Test Bot!\n"
-                "Select an option below:",
+                "✅ **You've joined!** 🎉\n\nWelcome to Misaq Test Bot!\nSelect an option below:",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -94,15 +86,13 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("✅ Check Again", callback_data="check_membership")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await query.edit_message_text(
-                "❌ **You haven't joined yet!**\n\n"
-                "Please join @MisaqInternational first:",
+                "❌ **You haven't joined yet!**\n\nPlease join the channel first.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
         return
-    
+
     if query.data == "toefl":
         keyboard = [
             [InlineKeyboardButton("✉️ Write an Email", callback_data="toefl_email")],
@@ -115,7 +105,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
-    
+
     elif query.data == "toefl_email":
         context.user_data['task'] = "email"
         await query.edit_message_text(
@@ -124,7 +114,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✍️ Type your email below:",
             parse_mode="Markdown"
         )
-    
+
     elif query.data == "toefl_discussion":
         context.user_data['task'] = "discussion"
         await query.edit_message_text(
@@ -133,7 +123,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✍️ Type your response below:",
             parse_mode="Markdown"
         )
-    
+
     elif query.data == "back":
         keyboard = [
             [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
@@ -147,43 +137,21 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
-    
-    elif query.data == "ielts":
-        await query.edit_message_text("🌍 **IELTS** coming soon!", parse_mode="Markdown")
-    
-    elif query.data == "help":
-        await query.edit_message_text(
-            "❓ **Help**\n\n"
-            "This bot grades your TOEFL writing.\n"
-            "Select a task and submit your writing!\n\n"
-            "Scores are out of 5.",
-            parse_mode="Markdown"
-        )
-    
-    elif query.data == "contact":
-        await query.edit_message_text(
-            "📞 **Contact**\n\n"
-            "For support: @MisaqSupport",
-            parse_mode="Markdown"
-        )
-    
-    else:
-        await query.edit_message_text(
-            f"🔄 {query.data.upper()} coming soon! 🚀",
-            parse_mode="Markdown"
-        )
 
-# ========== GRADE USER'S WRITING ==========
+    else:
+        await query.edit_message_text(f"🔄 {query.data.upper()} coming soon! 🚀", parse_mode="Markdown")
+
+# ========== GRADE USING REQUESTS (NO OPENAI LIBRARY) ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'task' not in context.user_data:
         await update.message.reply_text("⚠️ Please select a task from the menu first!")
         return
-    
+
     user_text = update.message.text
     task_type = context.user_data['task']
-    
+
     await update.message.reply_text("⏳ Grading your work... Please wait! ⏳")
-    
+
     if task_type == "email":
         prompt = f"""
 You are an expert TOEFL writing evaluator. Grade this email on 5 points for:
@@ -244,17 +212,35 @@ Overall: X/5
 💡 **Feedback:**
 [Write 2-3 sentences]
 """
-    
+
     try:
-        # THIS IS FOR OPENAI 0.28.0
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        reply = response.choices[0].message.content
-        await update.message.reply_text(reply, parse_mode="Markdown")
-        
+        # The OpenAI API URL
+        url = "https://api.openai.com/v1/chat/completions"
+
+        # The headers
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        # The data to send
+        data = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+
+        # Send the request
+        response = requests.post(url, headers=headers, json=data)
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            result = response.json()
+            reply = result['choices'][0]['message']['content']
+            await update.message.reply_text(reply, parse_mode="Markdown")
+        else:
+            error_detail = response.json().get('error', {}).get('message', 'Unknown error')
+            await update.message.reply_text(f"❌ OpenAI API Error: {error_detail}")
+
     except Exception as e:
         error_msg = f"❌ Error: {str(e)}"
         print(error_msg)
@@ -262,12 +248,10 @@ Overall: X/5
 
 # ========== RUN THE BOT ==========
 def main():
-    app = Application.builder().token(TOKEN).build()
-    
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_click))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
     print("🤖 Bot is running!")
     app.run_polling()
 
