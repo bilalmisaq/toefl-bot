@@ -1,5 +1,4 @@
 import os
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import openai
@@ -31,7 +30,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
-    # CHECK if user joined
     if not await is_member(user_id):
         keyboard = [
             [InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")],
@@ -50,7 +48,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # USER JOINED! Show MAIN MENU
     keyboard = [
         [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
         [InlineKeyboardButton("🌍 IELTS", callback_data="ielts")],
@@ -72,7 +69,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # CHECK MEMBERSHIP BUTTON
     if query.data == "check_membership":
         user_id = query.from_user.id
         
@@ -107,7 +103,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
     
-    # TOEFL MENU
     if query.data == "toefl":
         keyboard = [
             [InlineKeyboardButton("✉️ Write an Email", callback_data="toefl_email")],
@@ -116,11 +111,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "📚 **TOEFL Writing Tasks**\n\n"
-            "Choose a task to practice:\n\n"
-            "1️⃣ **Build a Sentence** - Coming soon\n"
-            "2️⃣ **Write an Email** - Practice formal writing\n"
-            "3️⃣ **Academic Discussion** - Practice forum responses",
+            "📚 **TOEFL Writing Tasks**\n\nChoose a task:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
@@ -129,7 +120,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['task'] = "email"
         await query.edit_message_text(
             "✉️ **Write an Email**\n\n"
-            "📌 Task: Write an email (100-150 words) to your professor requesting a 2-day extension on your assignment.\n\n"
+            "📌 Task: Write an email (100-150 words) to your professor requesting an extension.\n\n"
             "✍️ Type your email below:",
             parse_mode="Markdown"
         )
@@ -138,8 +129,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['task'] = "discussion"
         await query.edit_message_text(
             "💬 **Academic Discussion**\n\n"
-            "📌 Task: Your professor asks: 'Should schools require students to wear uniforms? Share your opinion.'\n\n"
-            "Write 100-120 words responding to this question.\n\n"
+            "📌 Task: Respond to: 'Should schools require uniforms? Give reasons.'\n\n"
             "✍️ Type your response below:",
             parse_mode="Markdown"
         )
@@ -153,43 +143,27 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🎯 **Main Menu**\n\n"
-            "Select an option:",
+            "🎯 **Main Menu**\n\nSelect an option:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
     
     elif query.data == "ielts":
-        await query.edit_message_text(
-            "🌍 **IELTS Section**\n\n"
-            "Coming soon! 🚀",
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text("🌍 **IELTS** coming soon!", parse_mode="Markdown")
     
     elif query.data == "help":
         await query.edit_message_text(
             "❓ **Help**\n\n"
-            "This bot helps you practice TOEFL and IELTS writing.\n\n"
-            "📌 How to use:\n"
-            "1. Select a task from the menu\n"
-            "2. Write your response\n"
-            "3. Get instant feedback with scores\n\n"
-            "📊 Scoring:\n"
-            "Each task is scored out of 5 in:\n"
-            "• Grammar\n"
-            "• Vocabulary\n"
-            "• Coherence\n"
-            "• Task Achievement\n"
-            "• Overall Score",
+            "This bot grades your TOEFL writing.\n"
+            "Select a task and submit your writing!\n\n"
+            "Scores are out of 5.",
             parse_mode="Markdown"
         )
     
     elif query.data == "contact":
         await query.edit_message_text(
             "📞 **Contact**\n\n"
-            "For support or feedback:\n"
-            "📧 Email: support@misaq.com\n"
-            "📱 Telegram: @MisaqSupport",
+            "For support: @MisaqSupport",
             parse_mode="Markdown"
         )
     
@@ -208,94 +182,80 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     task_type = context.user_data['task']
     
-    # Send "thinking" message
-    thinking_msg = await update.message.reply_text("⏳ Grading your work... Please wait! ⏳")
+    await update.message.reply_text("⏳ Grading your work... Please wait! ⏳")
     
     if task_type == "email":
         prompt = f"""
-You are an expert TOEFL writing evaluator.
+You are an expert TOEFL writing evaluator. Grade this email on 5 points for:
+1. Grammar
+2. Spelling
+3. Clarity
+4. Sentence Variety
+5. Overall Score
 
-TASK: Write an email to your professor requesting an extension.
+Also provide:
+- A revised 5/5 version
+- Short feedback
 
-EMAIL TO GRADE:
+User's Email:
 {user_text}
 
-Please provide:
-1. Score out of 5 for each category:
-   - Grammar
-   - Vocabulary  
-   - Coherence
-   - Task Achievement
-   - Overall Score
-
-2. A revised 5/5 version of the email
-
-3. Short feedback with 3 specific areas to improve
-
-FORMAT:
+Return in this exact format:
 📊 **Score Breakdown:**
 Grammar: X/5
-Vocabulary: X/5
-Coherence: X/5
-Task Achievement: X/5
+Spelling: X/5
+Clarity: X/5
+Sentence Variety: X/5
 Overall: X/5
 
 ✅ **5/5 Revised Version:**
 [Write the improved version]
 
 💡 **Feedback:**
-[3 specific points to improve]
+[Write 2-3 sentences]
 """
-    
-    else:  # discussion
+    else:
         prompt = f"""
-You are an expert TOEFL writing evaluator.
+You are an expert TOEFL writing evaluator. Grade this discussion response on 5 points for:
+1. Grammar
+2. Spelling
+3. Clarity
+4. Sentence Variety
+5. Overall Score
 
-TASK: Respond to the question: "Should schools require students to wear uniforms?"
+Also provide:
+- A revised 5/5 version
+- Short feedback
 
-RESPONSE TO GRADE:
+User's Response:
 {user_text}
 
-Please provide:
-1. Score out of 5 for each category:
-   - Grammar
-   - Vocabulary  
-   - Coherence
-   - Task Achievement
-   - Overall Score
-
-2. A revised 5/5 version of the response
-
-3. Short feedback with 3 specific areas to improve
-
-FORMAT:
+Return in this exact format:
 📊 **Score Breakdown:**
 Grammar: X/5
-Vocabulary: X/5
-Coherence: X/5
-Task Achievement: X/5
+Spelling: X/5
+Clarity: X/5
+Sentence Variety: X/5
 Overall: X/5
 
 ✅ **5/5 Revised Version:**
 [Write the improved version]
 
 💡 **Feedback:**
-[3 specific points to improve]
+[Write 2-3 sentences]
 """
     
     try:
-        # For older OpenAI version
+        # THIS IS FOR OPENAI 0.28.0
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}]
         )
         
         reply = response.choices[0].message.content
-        await thinking_msg.delete()
         await update.message.reply_text(reply, parse_mode="Markdown")
         
     except Exception as e:
-        await thinking_msg.delete()
         error_msg = f"❌ Error: {str(e)}"
         print(error_msg)
         await update.message.reply_text(error_msg)
