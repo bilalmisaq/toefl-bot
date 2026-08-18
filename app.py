@@ -1,11 +1,13 @@
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import openai
 
+# ========== YOUR SECRETS ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-CHANNEL_ID = "@MisaqInternational"  # ← CHANGE TO YOUR CHANNEL!
+CHANNEL_ID = "@MisaqInternational"  # YOUR CHANNEL!
 
 if not TOKEN or not OPENAI_KEY:
     print("❌ Missing keys!")
@@ -13,20 +15,25 @@ if not TOKEN or not OPENAI_KEY:
 
 openai.api_key = OPENAI_KEY
 
+# ========== CHECK IF USER JOINED CHANNEL ==========
 async def is_member(user_id):
     try:
+        # Create a new app instance for this check
+        app = Application.builder().token(TOKEN).build()
         member = await app.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        await app.shutdown()
         return member.status in ["member", "administrator", "creator"]
-    except:
+    except Exception as e:
+        print(f"Membership check error: {e}")
         return False
 
+# ========== START COMMAND ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
     # CHECK if user joined
     if not await is_member(user_id):
-        # User hasn't joined - show join button AND check button
         keyboard = [
             [InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")],
             [InlineKeyboardButton("✅ Check Membership", callback_data="check_membership")]
@@ -39,7 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👉 @MisaqInternational\n\n"
             "1️⃣ Click 'Join Our Channel'\n"
             "2️⃣ Join the channel\n"
-            "3️⃣ Come back and click 'Check Membership'",
+            "3️⃣ Click 'Check Membership'",
             reply_markup=reply_markup
         )
         return
@@ -61,6 +68,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# ========== BUTTON CLICKS ==========
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -70,7 +78,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
         
         if await is_member(user_id):
-            # They joined! Show menu
             keyboard = [
                 [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
                 [InlineKeyboardButton("🌍 IELTS", callback_data="ielts")],
@@ -87,7 +94,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
         else:
-            # Still not joined
             keyboard = [
                 [InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")],
                 [InlineKeyboardButton("✅ Check Again", callback_data="check_membership")]
@@ -157,6 +163,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
+# ========== GRADE USER'S WRITING ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'task' not in context.user_data:
         await update.message.reply_text("⚠️ Please select a task from the menu first!")
@@ -165,31 +172,93 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     task_type = context.user_data['task']
     
-    await update.message.reply_text("⏳ Grading...")
+    await update.message.reply_text("⏳ Grading your work... Please wait! ⏳")
     
     if task_type == "email":
-        prompt = f"Grade this email on Grammar, Spelling, Clarity, Sentence Variety (out of 5). Give overall score. Provide improved version. Email: {user_text}"
+        prompt = f"""
+You are an expert TOEFL writing evaluator. Grade this email on 5 points for:
+1. Grammar
+2. Spelling
+3. Clarity
+4. Sentence Variety
+5. Overall Score
+
+Also provide:
+- A revised 5/5 version
+- Short feedback
+
+User's Email:
+{user_text}
+
+Return in this exact format:
+📊 **Score Breakdown:**
+Grammar: X/5
+Spelling: X/5
+Clarity: X/5
+Sentence Variety: X/5
+Overall: X/5
+
+✅ **5/5 Revised Version:**
+[Write the improved version]
+
+💡 **Feedback:**
+[Write 2-3 sentences]
+"""
     else:
-        prompt = f"Grade this discussion response on Grammar, Spelling, Clarity, Sentence Variety (out of 5). Give overall score. Provide improved version. Response: {user_text}"
+        prompt = f"""
+You are an expert TOEFL writing evaluator. Grade this discussion response on 5 points for:
+1. Grammar
+2. Spelling
+3. Clarity
+4. Sentence Variety
+5. Overall Score
+
+Also provide:
+- A revised 5/5 version
+- Short feedback
+
+User's Response:
+{user_text}
+
+Return in this exact format:
+📊 **Score Breakdown:**
+Grammar: X/5
+Spelling: X/5
+Clarity: X/5
+Sentence Variety: X/5
+Overall: X/5
+
+✅ **5/5 Revised Version:**
+[Write the improved version]
+
+💡 **Feedback:**
+[Write 2-3 sentences]
+"""
     
     try:
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
         )
-        await update.message.reply_text(response.choices[0].message.content)
+        
+        reply = response.choices[0].message.content
+        await update.message.reply_text(reply, parse_mode="Markdown")
+        
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        error_msg = f"❌ Error: {str(e)}"
+        print(error_msg)
+        await update.message.reply_text(error_msg)
 
+# ========== RUN THE BOT ==========
 def main():
-    global app
     app = Application.builder().token(TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_click))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("🤖 Bot running!")
+    print("🤖 Bot is running!")
     app.run_polling()
 
 if __name__ == "__main__":
