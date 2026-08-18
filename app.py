@@ -30,14 +30,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Check if user joined channel
     if not await is_member(user.id):
-        keyboard = [[InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/yourchannel")]]
+        keyboard = [[InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
             f"👋 Welcome {user.first_name}!\n\n"
             "🎯 **Misaq Test Bot** - Free TOEFL & IELTS Practice!\n\n"
             "⚠️ Please join our channel first to unlock all features:\n"
-            "👉 @yourchannel\n\n"
+            "👉 @MisaqInternational\n\n"
             "After joining, click /start again.",
             reply_markup=reply_markup,
             parse_mode="Markdown"
