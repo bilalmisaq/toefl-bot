@@ -7,7 +7,7 @@ import openai
 # ========== SETUP ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-CHANNEL_ID = "@yourchannel"  # CHANGE THIS TO YOUR CHANNEL!
+CHANNEL_ID = "@MisaqInternational"  # CHANGE THIS TO YOUR CHANNEL!
 
 if not TOKEN or not OPENAI_KEY:
     print("❌ Missing keys!")
