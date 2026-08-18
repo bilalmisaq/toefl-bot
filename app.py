@@ -1,24 +1,23 @@
 import os
-import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import openai
 
-# ========== SETUP ==========
+# ========== YOUR SECRETS ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-CHANNEL_ID = "@MisaqInternational"  # CHANGE THIS TO YOUR CHANNEL!
+CHANNEL_ID = "@MisaqInternational"  # YOUR CHANNEL NAME!
 
 if not TOKEN or not OPENAI_KEY:
     print("❌ Missing keys!")
     exit(1)
 
 openai.api_key = OPENAI_KEY
-logging.basicConfig(level=logging.INFO)
 
 # ========== CHECK IF USER JOINED CHANNEL ==========
 async def is_member(user_id):
     try:
+        # This ACTUALLY checks if the user joined
         member = await app.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
     except:
@@ -27,24 +26,24 @@ async def is_member(user_id):
 # ========== START COMMAND ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    user_id = user.id
     
-    # Check if user joined channel
-    if not await is_member(user.id):
+    # CHECK if user joined the channel
+    if not await is_member(user_id):
+        # User hasn't joined - show join button
         keyboard = [[InlineKeyboardButton("📢 Join Our Channel", url="https://t.me/MisaqInternational")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
             f"👋 Welcome {user.first_name}!\n\n"
-            "🎯 **Misaq Test Bot** - Free TOEFL & IELTS Practice!\n\n"
-            "⚠️ Please join our channel first to unlock all features:\n"
+            "⚠️ Please join our channel FIRST to use this bot:\n"
             "👉 @MisaqInternational\n\n"
             "After joining, click /start again.",
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
+            reply_markup=reply_markup
         )
         return
     
-    # If they joined, show main menu
+    # USER JOINED! Show the MAIN MENU
     keyboard = [
         [InlineKeyboardButton("📚 TOEFL", callback_data="toefl")],
         [InlineKeyboardButton("🌍 IELTS", callback_data="ielts")],
@@ -54,28 +53,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "🎉 Welcome to **Misaq Test Bot**!\n\n"
-        "Select an option below:",
+        "🎉 **Welcome to Misaq Test Bot!**\n\n"
+        "✅ You've joined our channel!\n"
+        "Now select an option below:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
 
-# ========== MAIN MENU BUTTONS ==========
+# ========== BUTTON CLICKS ==========
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     if query.data == "toefl":
         keyboard = [
-            [InlineKeyboardButton("📝 Build a Sentence", callback_data="toefl_sentence")],
             [InlineKeyboardButton("✉️ Write an Email", callback_data="toefl_email")],
             [InlineKeyboardButton("💬 Academic Discussion", callback_data="toefl_discussion")],
             [InlineKeyboardButton("🔙 Back", callback_data="back")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "📚 **TOEFL Writing Tasks**\n\n"
-            "Choose a task to practice:",
+            "📚 **TOEFL Writing Tasks**\n\nChoose a task:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
@@ -84,7 +82,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['task'] = "email"
         await query.edit_message_text(
             "✉️ **Write an Email**\n\n"
-            "📌 Task: Write an email (100-150 words) to your professor requesting an extension on your assignment.\n\n"
+            "📌 Task: Write an email (100-150 words) to your professor requesting an extension.\n\n"
             "✍️ Type your email below:",
             parse_mode="Markdown"
         )
@@ -93,8 +91,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['task'] = "discussion"
         await query.edit_message_text(
             "💬 **Academic Discussion**\n\n"
-            "📌 Task: Write a response (100-120 words) to the professor's question:\n"
-            "'Should schools require students to wear uniforms? Give reasons.'\n\n"
+            "📌 Task: Respond to: 'Should schools require uniforms? Give reasons.'\n\n"
             "✍️ Type your response below:",
             parse_mode="Markdown"
         )
@@ -113,24 +110,23 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
     
-    elif query.data in ["ielts", "help", "contact"]:
+    else:
         await query.edit_message_text(
-            f"🔄 **Coming Soon!**\n\nThe {query.data.upper()} section is under development.\n\nStay tuned! 🚀",
+            f"🔄 {query.data.upper()} section coming soon! 🚀",
             parse_mode="Markdown"
         )
 
-# ========== GET USER'S ESSAY AND GRADE IT ==========
+# ========== GRADE USER'S WRITING ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'task' not in context.user_data:
-        await update.message.reply_text("Please select a task from the menu first!")
+        await update.message.reply_text("⚠️ Please select a task from the menu first!")
         return
     
     user_text = update.message.text
     task_type = context.user_data['task']
     
-    await update.message.reply_text("⏳ Grading your work... Please wait!")
+    await update.message.reply_text("⏳ Grading your work... Please wait! ⏳")
     
-    # Create the prompt based on task type
     if task_type == "email":
         prompt = f"""
 You are an expert TOEFL writing evaluator. Grade this email on 5 points for:
@@ -161,8 +157,7 @@ Overall: X/5
 💡 **Feedback:**
 [Write 2-3 sentences]
 """
-    
-    else:  # discussion
+    else:
         prompt = f"""
 You are an expert TOEFL writing evaluator. Grade this discussion response on 5 points for:
 1. Grammar
